@@ -214,7 +214,11 @@ echo "✓ GitHub repository configured"
 echo "Creating subdomain: $SUBDOMAIN..."
 
 # Auto-detect port from docker-compose.yml if possible
-DETECTED_PORT=$(bash "$(dirname "$0")/detect_port.sh" "./$COMPOSE_FILE" "$SERVICE_NAME" 2>/dev/null || echo "5000")
+if [ -f "./$COMPOSE_FILE" ]; then
+    DETECTED_PORT=$(bash "$(dirname "$0")/detect_port.sh" "./$COMPOSE_FILE" "$SERVICE_NAME" 2>/dev/null || echo "5000")
+else
+    DETECTED_PORT="5000"
+fi
 echo "Detected port: $DETECTED_PORT"
 
 DOMAIN_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/domain.create?batch=1" \
