@@ -1,6 +1,6 @@
 ---
 name: github-dokploy-deploy
-description: Automate project deployment workflow - initialize git repo, create GitHub repository, push code, and configure Dokploy webhook for automatic deployment on push. Supports both Dockerfile and docker-compose deployments with subdomain configuration. Use when user wants to deploy a project to Dokploy with GitHub integration.
+description: Automate project deployment workflow - initialize git repo, create GitHub repository, push code, and configure Dokploy webhook for automatic deployment on push. Supports both Dockerfile and docker-compose deployments with subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), environment variables management, and deployment validation. Use when user wants to deploy a project to Dokploy with GitHub integration.
 ---
 
 # GitHub + Dokploy Auto-Deploy
@@ -10,6 +10,14 @@ Automates the full deployment pipeline: local project → GitHub → Dokploy.
 Supports two deployment modes:
 - **Dockerfile**: Single container application
 - **Docker Compose**: Multi-container application with services
+
+## New Features (v1.1.0)
+
+- 🗄️ **Database Provisioning**: Automatically create and link databases
+- 🔐 **Environment Variables**: Automatic injection of database credentials
+- ✅ **Deployment Validation**: Pre-flight checks for Dockerfile/compose files
+- 📊 **Status Tracking**: Monitor deployment progress in real-time
+- 🔍 **Better Error Messages**: Clear validation and troubleshooting guidance
 
 ## Workflow
 
