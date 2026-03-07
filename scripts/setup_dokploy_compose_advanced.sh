@@ -98,8 +98,9 @@ if [ "$DATABASE_TYPE" != "none" ]; then
                 echo "Warning: Database creation failed, continuing without database"
             else
                 DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['postgresId'])" 2>/dev/null || echo "")
-                DATABASE_CONNECTION_STRING="postgresql://$DB_USER:$DB_PASSWORD@$DB_NAME:5432/$DB_NAME"
-                echo "✓ PostgreSQL database created: $DB_NAME"
+                DB_APP_NAME=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['appName'])" 2>/dev/null || echo "$DB_NAME")
+                DATABASE_CONNECTION_STRING="postgresql://$DB_USER:$DB_PASSWORD@$DB_APP_NAME:5432/$DB_NAME"
+                echo "✓ PostgreSQL database created: $DB_NAME (container: $DB_APP_NAME)"
             fi
             ;;
         mysql)

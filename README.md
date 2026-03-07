@@ -9,7 +9,11 @@ Automate the full deployment pipeline: local project → GitHub → Dokploy.
 - 🌐 Subdomain configuration with SSL
 - 🔄 Auto-deploy on push to main branch
 - 🔗 GitHub provider integration
-- ✅ Tested and production-ready
+- 🗄️ **NEW: Database provisioning** (PostgreSQL, MySQL, MongoDB, MariaDB, Redis)
+- 🔐 **NEW: Environment variables management**
+- ✅ **NEW: Pre-deployment validation**
+- 📊 **NEW: Real-time deployment status tracking**
+- 🔍 **NEW: Auto-detect ports from compose files**
 
 ## Installation
 
@@ -17,7 +21,7 @@ Automate the full deployment pipeline: local project → GitHub → Dokploy.
 
 ```bash
 # Download the .skill file
-wget https://github.com/jawg-zz/github-dokploy-deploy/raw/main/github-dokploy-deploy.skill
+wget https://github.com/jawg-zz/github-dokploy-deploy/releases/download/v1.1.0/github-dokploy-deploy.skill
 
 # Install to OpenClaw
 mkdir -p ~/.openclaw/skills
@@ -33,6 +37,29 @@ git clone https://github.com/jawg-zz/github-dokploy-deploy.git
 # Copy to OpenClaw skills directory
 cp -r github-dokploy-deploy ~/workspace/skills/
 ```
+
+## What's New in v1.1.0
+
+### 🗄️ Database Provisioning
+Automatically create and link databases to your applications:
+- PostgreSQL, MySQL, MongoDB, MariaDB, Redis
+- Secure credential generation
+- Automatic `DATABASE_URL` injection
+
+### ✅ Deployment Validation
+Pre-flight checks before deployment:
+- YAML/Dockerfile syntax validation
+- Port configuration checks
+- Best practices warnings
+
+### 📊 Status Tracking
+Monitor deployments in real-time:
+- Follow mode to watch progress
+- Clear status indicators
+- Direct links to logs
+
+### 🔧 Port Auto-Detection
+Automatically detect ports from docker-compose.yml - no manual configuration needed!
 
 ## Prerequisites
 
@@ -73,31 +100,52 @@ Once installed, the skill automatically triggers when you ask OpenClaw to deploy
 
 ### Example Commands
 
-**Deploy with Docker Compose:**
+**Deploy with Docker Compose and PostgreSQL:**
 ```
-Deploy this project to Dokploy with subdomain myapp.example.com
-```
-
-**Deploy with Dockerfile:**
-```
-Deploy this Flask app to Dokploy
+Deploy this project to Dokploy with a PostgreSQL database at myapp.example.com
 ```
 
-**Full workflow:**
+**Deploy with validation:**
 ```
-Create a GitHub repo for this project and deploy it to Dokploy with auto-deploy enabled
+Validate and deploy this app to Dokploy
 ```
 
-## How It Works
+**Monitor deployment:**
+```
+Check the deployment status for my app
+```
 
-The skill handles the complete deployment workflow:
+## Manual Usage
 
-1. **Git Setup** - Initializes git if needed, configures user details
-2. **GitHub Repository** - Creates a new repository via GitHub API
-3. **Push Code** - Commits and pushes your code to GitHub
-4. **Dokploy Configuration** - Creates compose/application service with GitHub integration
-5. **Domain Setup** - Configures subdomain with SSL
-6. **Auto-Deploy** - Enables automatic deployment on push to main
+### Deploy with Database
+
+```bash
+scripts/setup_dokploy_compose_advanced.sh \
+  https://main.spidmax.win \
+  API_KEY \
+  https://github.com/user/my-app \
+  PROJECT_ID \
+  myapp.example.com \
+  web \
+  docker-compose.yml \
+  postgres
+```
+
+### Validate Before Deploying
+
+```bash
+scripts/validate_deployment.sh ./docker-compose.yml
+```
+
+### Monitor Deployment
+
+```bash
+scripts/check_deployment_status.sh \
+  https://main.spidmax.win \
+  API_KEY \
+  COMPOSE_ID \
+  true  # Follow mode
+```
 
 ## Docker Compose Format
 
@@ -112,7 +160,7 @@ services:
     ports:
       - 5000
     environment:
-      - FLASK_ENV=production
+      - DATABASE_URL
     restart: unless-stopped
 ```
 
@@ -128,9 +176,15 @@ No need for Traefik labels or explicit networks - Dokploy manages that for you.
 - Regenerate the token if needed
 
 **Deployment fails**
+- Run validation first: `scripts/validate_deployment.sh ./docker-compose.yml`
 - Check deployment logs in Dokploy UI
 - Verify your docker-compose.yml or Dockerfile is correct
 - Ensure the service name matches what's in your compose file
+
+**Database connection issues**
+- Check that DATABASE_URL environment variable is set
+- Verify database service is running in Dokploy UI
+- Check database logs for connection errors
 
 ## Contributing
 
@@ -141,6 +195,23 @@ Contributions are welcome! Please:
 3. Make your changes
 4. Test thoroughly
 5. Submit a pull request
+
+## Changelog
+
+### v1.1.0 (2026-03-07)
+- Added database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis)
+- Added environment variables management
+- Added pre-deployment validation
+- Added real-time deployment status tracking
+- Added port auto-detection from compose files
+- Improved error messages and user guidance
+
+### v1.0.0 (2026-03-07)
+- Initial release
+- GitHub repository creation and push
+- Dokploy webhook configuration
+- Docker Compose and Dockerfile support
+- Subdomain setup with SSL
 
 ## License
 
@@ -154,3 +225,4 @@ Tested with:
 - Dokploy (self-hosted deployment platform)
 - GitHub API
 - Docker & Docker Compose
+- PostgreSQL, MySQL, MongoDB, MariaDB, Redis
