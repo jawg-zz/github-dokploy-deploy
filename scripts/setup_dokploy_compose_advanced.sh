@@ -212,10 +212,14 @@ echo "✓ GitHub repository configured"
 # Create domain for the compose service
 echo "Creating subdomain: $SUBDOMAIN..."
 
+# Auto-detect port from docker-compose.yml if possible
+DETECTED_PORT=$(bash "$(dirname "$0")/detect_port.sh" "./$COMPOSE_FILE" "$SERVICE_NAME" 2>/dev/null || echo "5000")
+echo "Detected port: $DETECTED_PORT"
+
 DOMAIN_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/domain.create?batch=1" \
     -H "x-api-key: $DOKPLOY_API_KEY" \
     -H "Content-Type: application/json" \
-    -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":true,\"port\":5000,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\",\"certificateType\":\"none\"}}}")
+    -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":true,\"port\":$DETECTED_PORT,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\",\"certificateType\":\"none\"}}}")
 
 # Check for domain creation errors
 if echo "$DOMAIN_RESPONSE" | grep -q '"error"'; then

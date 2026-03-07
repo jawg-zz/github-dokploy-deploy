@@ -25,11 +25,19 @@ if [[ "$FILENAME" == *"compose"* ]] || [[ "$FILENAME" == *".yml" ]] || [[ "$FILE
     echo "Detected docker-compose file"
     
     # Check YAML syntax
-    if ! python3 -c "import yaml; yaml.safe_load(open('$FILE_PATH'))" 2>/dev/null; then
-        echo "❌ Invalid YAML syntax"
-        VALIDATION_PASSED=false
+    if command -v python3 >/dev/null 2>&1; then
+        if python3 -c "import yaml" 2>/dev/null; then
+            if ! python3 -c "import yaml; yaml.safe_load(open('$FILE_PATH'))" 2>/dev/null; then
+                echo "❌ Invalid YAML syntax"
+                VALIDATION_PASSED=false
+            else
+                echo "✓ YAML syntax valid"
+            fi
+        else
+            echo "ℹ Info: PyYAML not installed, skipping YAML syntax check"
+        fi
     else
-        echo "✓ YAML syntax valid"
+        echo "ℹ Info: Python3 not available, skipping YAML syntax check"
     fi
     
     # Check for services section
