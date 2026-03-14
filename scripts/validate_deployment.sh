@@ -59,10 +59,47 @@ if [[ "$FILENAME" == *"compose"* ]] || [[ "$FILENAME" == *".yml" ]] || [[ "$FILE
     if grep -q "host.docker.internal" "$FILE_PATH"; then
         echo "⚠ Warning: Using host.docker.internal (may not work in all environments)"
     fi
-    
+
     # Check for version (optional in newer compose)
     if ! grep -q "version:" "$FILE_PATH"; then
         echo "ℹ Info: No version specified (using Compose v2+ format)"
+    fi
+
+    # Dokploy-specific: Check for env_file (needed for variable injection)
+    if ! grep -q "env_file:" "$FILE_PATH" && ! grep -q "environment:" "$FILE_PATH"; then
+        echo "⚠ Warning: No env_file or environment found"
+        echo "  Dokploy writes variables to .env but they won't reach containers"
+        echo "  Add 'env_file: [.env]' or 'environment:' to your services"
+    else
+        echo "✓ Environment variable injection configured"
+    fi
+
+    # Dokploy-specific: Check for absolute path volumes (get cleaned up)
+    if grep -qE '^\s*-\s*/' "$FILE_PATH" | grep -qE '^\s*-\s*/[a-z]'; then
+        echo "⚠ Warning: Absolute path volumes detected"
+        echo "  Absolute paths may be cleaned up during deployments"
+        echo "  Use '../files/' for bind mounts or named volumes instead"
+    fi
+
+    # Dokploy-specific: Check for health check endpoint
+    if ! grep -q "healthcheck:" "$FILE_PATH" && ! grep -qE "HEALTHCHECK" "$FILE_PATH"; then
+        echo "⚠ Warning: No health check configured"
+        echo "  Add health checks for zero downtime deployments and auto-rollback"
+        echo "  See references/best-practices.md for configuration"
+    else
+        echo "✓ Health check configured"
+    fi
+
+    # Dokploy-specific: Check for restart policy
+    if ! grep -q "restart:" "$FILE_PATH"; then
+        echo "ℹ Info: No restart policy specified (consider 'restart: unless-stopped')"
+    else
+        echo "✓ Restart policy found"
+    fi
+
+    # Dokploy-specific: Check for .dockerignore reminder
+    if [ ! -f ".dockerignore" ] && [ -f "Dockerfile" ]; then
+        echo "ℹ Info: No .dockerignore file found (may cause large build contexts)"
     fi
 
 # Validate Dockerfile

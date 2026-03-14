@@ -49,11 +49,19 @@ Store credentials in `/data/workspace/TOOLS.md`:
 - Username: <username>
 ```
 
+## Best Practices
+
+For production-ready deployments, see `references/best-practices.md` covering:
+- **Environment variables** — Must use `env_file` or `environment` in compose for variables to reach containers
+- **Volume persistence** — Use `../files/` for bind mounts, named volumes for backups
+- **Zero downtime** — Configure health checks in Swarm settings
+- **Rollbacks** — Health check + registry-based rollbacks
+- **Watch paths** — Only deploy when specific files change
+- **Production builds** — Use CI/CD to build images outside Dokploy
+
 ## Error Handling
 
 For troubleshooting deployment issues, see `references/troubleshooting.md`.
-
-Common issues: build failures, missing GitHub provider, domain conflicts, database connection errors.
 
 ## Scripts Reference
 
