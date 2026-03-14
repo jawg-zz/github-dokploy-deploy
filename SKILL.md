@@ -1,206 +1,73 @@
 ---
 name: github-dokploy-deploy
-description: Automate project deployment workflow - initialize git repo, create GitHub repository, push code, and configure Dokploy webhook for automatic deployment on push. Supports both Dockerfile and docker-compose deployments with subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), environment variables management, and deployment validation. Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
+description: Deploy projects to Dokploy via GitHub integration. Supports Dockerfile and Docker Compose deployments with subdomain, SSL, and database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis). Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
 ---
 
 # GitHub + Dokploy Auto-Deploy
 
-Automates the full deployment pipeline: local project → GitHub → Dokploy.
+Automates: local project → GitHub → Dokploy deployment.
 
-Supports two deployment modes:
-- **Dockerfile**: Single container application
-- **Docker Compose**: Multi-container application with services
+## Deployment Modes
 
-## New Features (v1.2.0)
+| Mode | Use When |
+|------|----------|
+| **Dockerfile** | Single container app with Dockerfile |
+| **Docker Compose** | Multi-container app with services + optional database |
 
-- 🔄 **Smart Updates**: Automatically detects existing services and updates instead of creating duplicates
-- 🗄️ **Database Provisioning**: Automatically create and link databases
-- 🔐 **Environment Variables**: Automatic injection of database credentials
-- ✅ **Deployment Validation**: Pre-flight checks for Dockerfile/compose files
-- 📊 **Status Tracking**: Monitor deployment progress in real-time
-- 🔍 **Better Error Messages**: Clear validation and troubleshooting guidance
+## Quick Start
+
+```bash
+# Dockerfile deployment
+scripts/setup_dokploy_webhook.sh <dokploy-url> <api-key> <github-repo-url> [project-id]
+
+# Docker Compose deployment (with database + health check)
+scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [database-type]
+```
 
 ## Workflow
 
-When a user wants to deploy a project:
+1. **Check prerequisites** — git, GitHub token, Dokploy API key
+2. **Initialize git** if needed → **Create GitHub repo** → **Push code**
+3. **Deploy** via appropriate script above
+4. Scripts handle: validation, service creation (or smart update), domain config, deployment trigger, health check
 
-1. **Check for existing service** - Query Dokploy to see if service already exists for this repo
-2. **Update or Create** - If exists, update the existing service; otherwise create new
-3. **Initialize Git** (if not already)
-4. **Create GitHub repo** (using GitHub API, if needed)
-5. **Push code to GitHub**
-6. **Configure Dokploy webhook** to deploy on push
-7. **Set up domain** (if not already configured)
+## Smart Updates
 
-## Prerequisites
+Scripts detect existing services for the same repo and **update** instead of creating duplicates.
 
-Check these before starting:
+## Environment Variables
 
-```bash
-# Git installed and configured
-git --version
-git config --global user.name || echo "Need git user.name"
-git config --global user.email || echo "Need git user.email"
-
-# GitHub CLI or API token available
-gh auth status 2>/dev/null || echo "Need GitHub auth"
-```
-
-## Step 1: Git Setup
-
-If project isn't a git repo:
-
-```bash
-cd /path/to/project
-git init
-git add .
-git commit -m "Initial commit"
-```
-
-If git user not configured, ask user for:
-- Name
-- Email
-
-Then configure:
-
-```bash
-git config --global user.name "User Name"
-git config --global user.email "user@example.com"
-```
-
-## Step 2: Create GitHub Repository
-
-Use the helper script:
-
-```bash
-scripts/create_github_repo.sh <repo-name> <github-token>
-```
-
-The script:
-- Creates the repo via GitHub API
-- Returns the repo URL
-- Handles errors (repo exists, auth failed, etc.)
-
-## Step 3: Push to GitHub
-
-```bash
-git remote add origin <repo-url>
-git branch -M main
-git push -u origin main
-```
-
-## Step 4: Configure Dokploy Deployment
-
-### Option A: Dockerfile Deployment (Single Container)
-
-Use for simple single-container apps:
-
-```bash
-scripts/setup_dokploy_webhook.sh <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id>
-```
-
-**Example:**
-```bash
-scripts/setup_dokploy_webhook.sh \
-  https://main.spidmax.win \
-  iGItKcVDSIIjquwmxYxeKACnJIUguPooNzpRlOynIhCYTEWbWfujyWAWxvjqSDtL \
-  https://github.com/jawg-zz/flask-test-app \
-  IZQrpyqKizrOYJf-F5PYa
-```
-
-**Requirements:**
-- Dockerfile in project root
-- Valid Dokploy API token (from Settings → Server → API Tokens)
-- Project ID (get from Dokploy UI or `project.all` endpoint)
-
-### Option B: Docker Compose Deployment (Multi-Container)
-
-Use for apps with multiple services (web + db, microservices, etc.):
-
-```bash
-scripts/setup_dokploy_compose.sh <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id> <subdomain> [compose-file]
-```
-
-**Example:**
-```bash
-scripts/setup_dokploy_compose.sh \
-  https://main.spidmax.win \
-  iGItKcVDSIIjquwmxYxeKACnJIUguPooNzpRlOynIhCYTEWbWfujyWAWxvjqSDtL \
-  https://github.com/jawg-zz/my-app \
-  IZQrpyqKizrOYJf-F5PYa \
-  myapp.spidmax.win \
-  docker-compose.yml
-```
-
-**Requirements:**
-- docker-compose.yml in project root (or specify path)
-- Valid Dokploy API token
-- Project ID
-- Subdomain (will be configured with SSL)
-- Service name from docker-compose.yml (e.g., "web", "app")
-
-**Docker Compose Format:**
-Dokploy handles routing automatically. Your compose file should:
-- Use simple `ports:` declaration (just port number, no host mapping)
-- No need for Traefik labels or explicit networks
-- Example:
-  ```yaml
-  services:
-    web:
-      build: .
-      ports:
-        - 5000
-      environment:
-        - FLASK_ENV=production
-      restart: unless-stopped
-  ```
-
-**Features:**
-- Creates compose service in Dokploy
-- Configures GitHub webhook for auto-deploy
-- Sets up subdomain with HTTPS
-- Enables auto-deploy on push to main
-
-See `references/dokploy-api.md` for API details.
-
-## Configuration Storage
-
-Store user credentials in `/data/workspace/TOOLS.md`:
+Store credentials in `/data/workspace/TOOLS.md`:
 
 ```markdown
-### GitHub
-- Token: ghp_xxxxx
-- Username: username
-
 ### Dokploy
 - URL: https://main.spidmax.win
-- API Key: xxxxx
+- API Key: <api-key>
+
+### GitHub
+- Token: ghp_<token>
+- Username: <username>
 ```
 
 ## Error Handling
 
-Common issues:
+For troubleshooting deployment issues, see `references/troubleshooting.md`.
 
-- **GitHub auth failed**: Token expired or invalid
-- **Repo already exists**: Ask if should use existing or rename
-- **Dokploy API error**: Check API key and URL
-- **Git not configured**: Prompt for user details
+Common issues: build failures, missing GitHub provider, domain conflicts, database connection errors.
+
+## Scripts Reference
+
+| Script | Purpose |
+|--------|---------|
+| `create_github_repo.sh` | Create GitHub repo via API |
+| `setup_dokploy_webhook.sh` | Dockerfile deployments |
+| `setup_dokploy_compose.sh` | Compose deployments (with DB + health check) |
+| `validate_deployment.sh` | Pre-flight checks for Dockerfile/compose |
+| `check_deployment_status.sh` | Monitor deployment progress |
+| `detect_port.sh` | Extract port from compose file |
 
 ## Usage Examples
 
-**IMPORTANT:** When user says "deploy" (without specifying a method), ALWAYS use this skill.
-
-User: "Deploy this project"
-→ Run full workflow with this skill
-
-User: "Deploy the blog app"
-→ Run full workflow with this skill
-
-User: "Deploy this project to Dokploy"
-→ Run full workflow
-
-User: "Push this to GitHub and auto-deploy"
-→ Run full workflow
-
-User: "Set up auto-deployment for my app"
-→ Run full workflow
+User: "Deploy this project" → Run full workflow
+User: "Push this to GitHub and auto-deploy" → Run full workflow
+User: "Set up auto-deployment for my app" → Run full workflow
