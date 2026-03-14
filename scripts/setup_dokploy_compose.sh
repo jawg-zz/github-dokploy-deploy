@@ -52,6 +52,27 @@ fi
 
 echo "Using environment: $ENVIRONMENT_ID"
 
+# Get GitHub provider ID (needed for both create and update)
+echo "Fetching GitHub provider..."
+GITHUB_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/github.githubProviders?batch=1&input=%7B%220%22%3A%7B%7D%7D" \
+    -H "x-api-key: $DOKPLOY_API_KEY")
+
+GITHUB_ID=$(echo "$GITHUB_DATA" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+providers = data[0]['result']['data']['json']
+if providers:
+    print(providers[0]['githubId'])
+" 2>/dev/null || echo "")
+
+if [ -z "$GITHUB_ID" ]; then
+    echo "Error: No GitHub provider found in Dokploy"
+    echo "Please configure a GitHub provider in Dokploy UI: $DOKPLOY_URL/dashboard/settings/git-providers"
+    exit 1
+fi
+
+echo "Using GitHub provider: $GITHUB_ID"
+
 # Check if compose service already exists for this repo
 echo "Checking for existing compose service..."
 EXISTING_COMPOSE=$(curl -s "$DOKPLOY_URL/api/trpc/project.one?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22projectId%22%3A%22$PROJECT_ID%22%7D%7D%7D" \
@@ -78,11 +99,11 @@ if [ -n "$EXISTING_COMPOSE_ID" ]; then
     echo "Updating existing service instead of creating new one..."
     COMPOSE_ID="$EXISTING_COMPOSE_ID"
     
-    # Update the existing compose service
+    # Update the existing compose service (with githubId for webhook)
     UPDATE_COMPOSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/compose.update?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"composePath\":\"./$COMPOSE_FILE\",\"sourceType\":\"github\",\"autoDeploy\":true}}}")
+        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"composePath\":\"./$COMPOSE_FILE\",\"sourceType\":\"github\",\"autoDeploy\":true}}}")
     
     if echo "$UPDATE_COMPOSE" | grep -q '"error"'; then
         UPDATE_ERROR=$(echo "$UPDATE_COMPOSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
@@ -119,28 +140,7 @@ fi
 echo "✓ Compose service created: $COMPOSE_ID"
 fi
 
-# Get GitHub provider ID
-echo "Fetching GitHub provider..."
-GITHUB_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/github.githubProviders?batch=1&input=%7B%220%22%3A%7B%7D%7D" \
-    -H "x-api-key: $DOKPLOY_API_KEY")
-
-GITHUB_ID=$(echo "$GITHUB_DATA" | python3 -c "
-import sys, json
-data = json.load(sys.stdin)
-providers = data[0]['result']['data']['json']
-if providers:
-    print(providers[0]['githubId'])
-" 2>/dev/null || echo "")
-
-if [ -z "$GITHUB_ID" ]; then
-    echo "Error: No GitHub provider found in Dokploy"
-    echo "Please configure a GitHub provider in Dokploy UI: $DOKPLOY_URL/dashboard/settings/git-providers"
-    exit 1
-fi
-
-echo "Using GitHub provider: $GITHUB_ID"
-
-# Update compose with GitHub repository details (skip if we updated existing service)
+# Update compose with GitHub repository details (for new services only, existing already got githubId)
 if [ -z "$EXISTING_COMPOSE_ID" ]; then
     echo "Configuring GitHub repository..."
     UPDATE_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/compose.update?batch=1" \

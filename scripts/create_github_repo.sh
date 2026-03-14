@@ -18,15 +18,18 @@ RESPONSE=$(curl -s -X POST \
     https://api.github.com/user/repos \
     -d "{\"name\":\"$REPO_NAME\",\"private\":false}")
 
-# Check for errors
-if echo "$RESPONSE" | grep -q '"message"'; then
-    ERROR=$(echo "$RESPONSE" | grep -o '"message":"[^"]*"' | cut -d'"' -f4)
+# Check for errors using proper JSON parsing
+if echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); sys.exit(0 if 'message' not in data else 1)" 2>/dev/null; then
+    # No error message field - check for API error structure
+    :
+else
+    ERROR=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
     echo "Error: $ERROR"
     exit 1
 fi
 
-# Extract repo URL
-REPO_URL=$(echo "$RESPONSE" | grep -o '"clone_url":"[^"]*"' | cut -d'"' -f4)
+# Extract repo URL using proper JSON parsing
+REPO_URL=$(echo "$RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data.get('clone_url', ''))" 2>/dev/null || echo "")
 
 if [ -z "$REPO_URL" ]; then
     echo "Error: Could not extract repo URL"

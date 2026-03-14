@@ -23,7 +23,7 @@ echo "Setting up Dokploy deployment for: $OWNER/$REPO_NAME"
 
 # Get project details to find the default environment ID
 echo "Fetching project details..."
-PROJECT_DATA=$(curl -s "https://main.spidmax.win/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%7D%7D%7D" \
+PROJECT_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%7D%7D%7D" \
     -H "x-api-key: $DOKPLOY_API_KEY")
 
 # Extract environment ID for the project
