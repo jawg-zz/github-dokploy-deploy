@@ -52,7 +52,7 @@ Dokploy doesn't have a direct rollback API. To rollback:
 
 ## SSL Certificate Issues
 
-If HTTPS isn't working:
+SSL is handled automatically by Traefik. If HTTPS isn't working:
 1. Verify DNS points to Dokploy server
-2. Check certificate status in domain settings
-3. Try setting `certificateType` to `letsencrypt` instead of `none`
+2. Ensure domain is configured with `https: true`
+3. Check Traefik logs in Dokploy dashboard for certificate errors

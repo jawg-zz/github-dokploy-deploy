@@ -106,11 +106,7 @@ Prerequisites for registry-based rollbacks:
 
 ## SSL Certificates
 
-- **Let's Encrypt:** Automatic with custom domains (recommended)
-- **traefik.me:** HTTP only by default. For HTTPS, download certificates:
-  - `https://traefik.me/fullchain.pem`
-  - `https://traefik.me/privkey.pem`
-  - Upload to Dokploy → Certificates → set cert provider to "None" in domain settings
+SSL is handled automatically by Traefik in Dokploy — no manual certificate configuration needed. When you add a domain with HTTPS enabled, Traefik automatically provisions and renews Let's Encrypt certificates.
 
 ## Watch Paths
 

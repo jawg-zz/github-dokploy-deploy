@@ -300,7 +300,7 @@ else
     DOMAIN_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/domain.create?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":true,\"port\":$DETECTED_PORT,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\",\"certificateType\":\"none\"}}}")
+        -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":true,\"port\":$DETECTED_PORT,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\"}}}")
 
     if echo "$DOMAIN_RESPONSE" | grep -q '"error"'; then
         DOMAIN_ERROR=$(echo "$DOMAIN_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
