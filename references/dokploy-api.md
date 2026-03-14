@@ -15,6 +15,8 @@ Dokploy uses **tRPC** (TypeScript RPC) protocol.
 x-api-key: <api-key>
 ```
 
+**IMPORTANT:** Use `x-api-key` header, NOT `Authorization: Bearer`
+
 **Generate API Key:**
 1. Login to Dokploy dashboard
 2. Go to Settings → Server → API Tokens
@@ -27,14 +29,14 @@ x-api-key: <api-key>
 
 ```bash
 curl "https://main.spidmax.win/api/trpc/[procedure]?batch=1&input=%7B%220%22%3A%7B%7D%7D" \
-  -H "Authorization: Bearer <api-key>"
+  -H "x-api-key: <api-key>"
 ```
 
 ### Mutation (POST)
 
 ```bash
 curl -X POST "https://main.spidmax.win/api/trpc/[procedure]?batch=1" \
-  -H "Authorization: Bearer <api-key>" \
+  -H "x-api-key: <api-key>" \
   -H "Content-Type: application/json" \
   -d '{"0":{"json":{...}}}'
 ```
@@ -45,7 +47,7 @@ curl -X POST "https://main.spidmax.win/api/trpc/[procedure]?batch=1" \
 
 ```bash
 curl "https://main.spidmax.win/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%7D%7D" \
-  -H "Authorization: Bearer <api-key>"
+  -H "x-api-key: <api-key>"
 ```
 
 **Response:**
@@ -65,7 +67,7 @@ curl "https://main.spidmax.win/api/trpc/project.all?batch=1&input=%7B%220%22%3A%
 
 ```bash
 curl -X POST "https://main.spidmax.win/api/trpc/application.create?batch=1" \
-  -H "Authorization: Bearer <api-key>" \
+  -H "x-api-key: <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "0": {
@@ -116,14 +118,14 @@ curl -X POST "https://main.spidmax.win/api/trpc/application.create?batch=1" \
 
 ```bash
 curl "https://main.spidmax.win/api/trpc/application.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22projectId%22%3A%22ixqvvqxb%22%7D%7D%7D" \
-  -H "Authorization: Bearer <api-key>"
+  -H "x-api-key: <api-key>"
 ```
 
 ### Deploy Application
 
 ```bash
 curl -X POST "https://main.spidmax.win/api/trpc/deployment.create?batch=1" \
-  -H "Authorization: Bearer <api-key>" \
+  -H "x-api-key: <api-key>" \
   -H "Content-Type: application/json" \
   -d '{
     "0": {

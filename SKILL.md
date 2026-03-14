@@ -1,6 +1,6 @@
 ---
 name: github-dokploy-deploy
-description: Automate project deployment workflow - initialize git repo, create GitHub repository, push code, and configure Dokploy webhook for automatic deployment on push. Supports both Dockerfile and docker-compose deployments with subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), environment variables management, and deployment validation. Use when user wants to deploy a project to Dokploy with GitHub integration.
+description: Automate project deployment workflow - initialize git repo, create GitHub repository, push code, and configure Dokploy webhook for automatic deployment on push. Supports both Dockerfile and docker-compose deployments with subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), environment variables management, and deployment validation. Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
 ---
 
 # GitHub + Dokploy Auto-Deploy
@@ -11,8 +11,9 @@ Supports two deployment modes:
 - **Dockerfile**: Single container application
 - **Docker Compose**: Multi-container application with services
 
-## New Features (v1.1.0)
+## New Features (v1.2.0)
 
+- 🔄 **Smart Updates**: Automatically detects existing services and updates instead of creating duplicates
 - 🗄️ **Database Provisioning**: Automatically create and link databases
 - 🔐 **Environment Variables**: Automatic injection of database credentials
 - ✅ **Deployment Validation**: Pre-flight checks for Dockerfile/compose files
@@ -23,10 +24,13 @@ Supports two deployment modes:
 
 When a user wants to deploy a project:
 
-1. **Initialize Git** (if not already)
-2. **Create GitHub repo** (using GitHub API)
-3. **Push code to GitHub**
-4. **Configure Dokploy webhook** to deploy on push
+1. **Check for existing service** - Query Dokploy to see if service already exists for this repo
+2. **Update or Create** - If exists, update the existing service; otherwise create new
+3. **Initialize Git** (if not already)
+4. **Create GitHub repo** (using GitHub API, if needed)
+5. **Push code to GitHub**
+6. **Configure Dokploy webhook** to deploy on push
+7. **Set up domain** (if not already configured)
 
 ## Prerequisites
 
@@ -183,6 +187,14 @@ Common issues:
 - **Git not configured**: Prompt for user details
 
 ## Usage Examples
+
+**IMPORTANT:** When user says "deploy" (without specifying a method), ALWAYS use this skill.
+
+User: "Deploy this project"
+→ Run full workflow with this skill
+
+User: "Deploy the blog app"
+→ Run full workflow with this skill
 
 User: "Deploy this project to Dokploy"
 → Run full workflow
