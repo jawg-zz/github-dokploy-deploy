@@ -3,8 +3,8 @@
 ## Deployment Failures
 
 ### Build fails immediately
-**Cause:** Missing Dockerfile or invalid docker-compose.yml
-**Fix:** Run `scripts/validate_deployment.sh <file>` to check for issues
+**Cause:** Invalid docker-compose.yml or missing build context
+**Fix:** Run `scripts/validate_deployment.sh docker-compose.yml` to check for issues
 
 ### "No GitHub provider found"
 **Cause:** GitHub not configured in Dokploy

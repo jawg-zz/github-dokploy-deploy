@@ -1,39 +1,48 @@
 ---
 name: github-dokploy-deploy
-description: Deploy projects to Dokploy via GitHub integration. Supports Dockerfile and Docker Compose deployments with subdomain, SSL, and database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis). Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
+description: Deploy projects to Dokploy via GitHub integration using Docker Compose. Supports subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), and automatic deployment on push. Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
 ---
 
 # GitHub + Dokploy Auto-Deploy
 
-Automates: local project → GitHub → Dokploy deployment.
-
-## Deployment Modes
-
-| Mode | Use When |
-|------|----------|
-| **Dockerfile** | Single container app with Dockerfile |
-| **Docker Compose** | Multi-container app with services + optional database |
+Automates: local project → GitHub → Dokploy Docker Compose deployment.
 
 ## Quick Start
 
 ```bash
-# Dockerfile deployment
-scripts/setup_dokploy_webhook.sh <dokploy-url> <api-key> <github-repo-url> [project-id]
-
-# Docker Compose deployment (with database + health check)
 scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [database-type]
 ```
+
+Database types: `none`, `postgres`, `mysql`, `mongodb`, `mariadb`, `redis`
 
 ## Workflow
 
 1. **Check prerequisites** — git, GitHub token, Dokploy API key
 2. **Initialize git** if needed → **Create GitHub repo** → **Push code**
-3. **Deploy** via appropriate script above
-4. Scripts handle: validation, service creation (or smart update), domain config, deployment trigger, health check
+3. **Deploy** via compose script
+4. Script handles: validation, service creation (or smart update), domain config, deployment trigger, health check
 
 ## Smart Updates
 
-Scripts detect existing services for the same repo and **update** instead of creating duplicates.
+Script detects existing services for the same repo and **updates** instead of creating duplicates.
+
+## Prerequisites
+
+Every project needs a `docker-compose.yml` before deploying. If missing, create one:
+
+```yaml
+services:
+  web:
+    build: .
+    ports:
+      - 5000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+```
 
 ## Environment Variables
 
@@ -61,15 +70,14 @@ For production-ready deployments, see `references/best-practices.md` covering:
 
 ## Error Handling
 
-For troubleshooting deployment issues, see `references/troubleshooting.md`.
+For troubleshooting, see `references/troubleshooting.md`.
 
 ## Scripts Reference
 
 | Script | Purpose |
 |--------|---------|
 | `create_github_repo.sh` | Create GitHub repo via API |
-| `setup_dokploy_webhook.sh` | Dockerfile deployments |
-| `setup_dokploy_compose.sh` | Compose deployments (with DB + health check) |
+| `setup_dokploy_compose.sh` | Docker Compose deployments (with DB + health check) |
 | `validate_deployment.sh` | Pre-flight checks for Dockerfile/compose |
 | `check_deployment_status.sh` | Monitor deployment progress |
 | `detect_port.sh` | Extract port from compose file |
