@@ -78,7 +78,7 @@ For troubleshooting, see `references/troubleshooting.md`.
 |--------|---------|
 | `create_github_repo.sh` | Create GitHub repo via API |
 | `setup_dokploy_compose.sh` | Docker Compose deployments (with DB + health check) |
-| `validate_deployment.sh` | Pre-flight checks for Dockerfile/compose |
+| `validate_deployment.sh` | Pre-flight checks for docker-compose.yml |
 | `check_deployment_status.sh` | Monitor deployment progress |
 | `detect_port.sh` | Extract port from compose file |
 
