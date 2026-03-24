@@ -1,6 +1,6 @@
 ---
 name: github-dokploy-deploy
-description: Deploy projects to Dokploy via GitHub integration using Docker Compose. Supports subdomain configuration, database provisioning (PostgreSQL, MySQL, MongoDB, MariaDB, Redis), and automatic deployment on push. Use when user says "deploy" or wants to deploy a project to Dokploy with GitHub integration. ALWAYS use this skill for deployment requests.
+description: Deploy web apps and services to Dokploy via GitHub integration with Docker Compose. Supports subdomain configuration, SSL, and automatic deployment on push. Use when user asks to deploy, host, publish, launch, set up, or put a web app/service/project online. Covers full-stack apps, APIs, static sites, and any containerized service. All services (app, databases, workers) are defined in a single docker-compose.yml file. ALWAYS use this skill for deployment requests instead of manual Docker/container setup.
 ---
 
 # GitHub + Dokploy Auto-Deploy
@@ -10,47 +10,76 @@ Automates: local project → GitHub → Dokploy Docker Compose deployment.
 ## Quick Start
 
 ```bash
-scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [database-type]
+# Step 1: List or create a project
+scripts/list_or_create_project.sh <dokploy-url> <api-key> [new-project-name]
+
+# Step 2: Deploy to the chosen project
+scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file]
 ```
 
-Database types: `none`, `postgres`, `mysql`, `mongodb`, `mariadb`, `redis`
+## Core Workflow
 
-## Workflow
+1. Check prerequisites (git, GitHub token, Dokploy API key)
+2. Discover or create project (interactive selection)
+3. Initialize git → Create GitHub repo → Push code
+4. Deploy via compose script
+5. Auto-configure: domain, SSL, health checks, auto-deploy webhook
 
-1. **Check prerequisites** — git, GitHub token, Dokploy API key
-2. **Initialize git** if needed → **Create GitHub repo** → **Push code**
-3. **Deploy** via compose script
-4. Script handles: validation, service creation (or smart update), domain config, deployment trigger, health check
+## Docker Compose Structure
 
-## Smart Updates
+All services (app, databases, workers, etc.) are defined in a single `docker-compose.yml` file, just like Dokploy's built-in templates.
 
-Script detects existing services for the same repo and **updates** instead of creating duplicates.
-
-## Prerequisites
-
-Every project needs a `docker-compose.yml` before deploying. If missing, create one:
+**Example: Full-stack app with database**
 
 ```yaml
 services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: myapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
   web:
     build: .
     ports:
-      - 5000
+      - 3000
+    environment:
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/myapp
+      NODE_ENV: production
+    depends_on:
+      - postgres
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+volumes:
+  postgres_data:
 ```
 
-## Environment Variables
+## Prerequisites
 
-Store credentials in `/data/workspace/TOOLS.md`:
+Projects need `docker-compose.yml` before deploying. Generate one:
+
+```bash
+bash scripts/detect_framework.sh [project-dir]
+```
+
+Or create manually using the structure above.
+
+## Credentials
+
+Store in TOOLS.md:
 
 ```markdown
 ### Dokploy
-- URL: https://main.spidmax.win
+- URL: https://dokploy.example.com
 - API Key: <api-key>
 
 ### GitHub
@@ -58,32 +87,40 @@ Store credentials in `/data/workspace/TOOLS.md`:
 - Username: <username>
 ```
 
-## Best Practices
+## Advanced Features
 
-For production-ready deployments, see `references/best-practices.md` covering:
-- **Environment variables** — Must use `env_file` or `environment` in compose for variables to reach containers
-- **Volume persistence** — Use `../files/` for bind mounts, named volumes for backups
-- **Zero downtime** — Configure health checks in Swarm settings
-- **Rollbacks** — Health check + registry-based rollbacks
-- **Watch paths** — Only deploy when specific files change
-- **Production builds** — Use CI/CD to build images outside Dokploy
+For optional features, see references:
 
-## Error Handling
+- **Framework detection & code generation**: `references/framework-detection.md`
+- **Deployment diagnostics**: `references/diagnostics.md`
+- **Watch paths**: `references/watch-paths.md`
+- **Domain management**: `references/domains.md`
+- **Domain configuration fix**: `references/domain-fix.md` (Important: Port + Service Name required)
 
-For troubleshooting, see `references/troubleshooting.md`.
-
-## Scripts Reference
+## Core Scripts
 
 | Script | Purpose |
 |--------|---------|
-| `create_github_repo.sh` | Create GitHub repo via API |
-| `setup_dokploy_compose.sh` | Docker Compose deployments (with DB + health check) |
-| `validate_deployment.sh` | Pre-flight checks for docker-compose.yml |
-| `check_deployment_status.sh` | Monitor deployment progress |
-| `detect_port.sh` | Extract port from compose file |
+| `list_or_create_project.sh` | List existing projects or create new one |
+| `setup_dokploy_compose.sh` | Deploy Docker Compose service |
+| `list_services.sh` | List all services with status |
+| `restart_service.sh` | Redeploy, start, or stop service |
+| `get_logs.sh` | Fetch deployment logs |
+| `update_env.sh` | View or update environment variables |
+| `delete_service.sh` | Delete service |
 
-## Usage Examples
+## Service Management
 
-User: "Deploy this project" → Run full workflow
-User: "Push this to GitHub and auto-deploy" → Run full workflow
-User: "Set up auto-deployment for my app" → Run full workflow
+```bash
+# List services
+bash scripts/list_services.sh <dokploy-url> <api-key>
+
+# Redeploy
+bash scripts/restart_service.sh <dokploy-url> <api-key> compose <service-id>
+
+# View logs
+bash scripts/get_logs.sh <dokploy-url> <api-key> compose <service-id>
+
+# Update env vars
+bash scripts/update_env.sh <dokploy-url> <api-key> <service-id> set 'VAR=value'
+```

@@ -1,6 +1,6 @@
 #!/bin/bash
-# Configure Dokploy docker-compose deployment with GitHub webhook, subdomain, and optional database
-# Features: smart updates, validation, health check, database provisioning
+# Configure Dokploy docker-compose deployment with GitHub webhook and subdomain
+# Features: smart updates, validation, health check
 
 set -e
 
@@ -11,15 +11,18 @@ PROJECT_ID="$4"
 SUBDOMAIN="$5"
 SERVICE_NAME="${6:-web}"
 COMPOSE_FILE="${7:-docker-compose.yml}"
-DATABASE_TYPE="${8:-none}"  # none, postgres, mysql, mongodb, mariadb, redis
+ENVIRONMENT_ID="${8:-}"  # Optional: pre-resolved environment ID (from list_or_create_project.sh)
+SERVICE_PORT="${9:-3000}"  # Port for domain routing (default: 3000)
 
 if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$GITHUB_REPO_URL" ] || [ -z "$PROJECT_ID" ] || [ -z "$SUBDOMAIN" ]; then
-    echo "Usage: $0 <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [database-type]"
+    echo "Usage: $0 <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [environment-id] [port]"
     echo ""
-    echo "Database types: none, postgres, mysql, mongodb, mariadb, redis"
+    echo "Port: Service port for domain routing (default: 3000)"
+    echo ""
+    echo "Tip: Use list_or_create_project.sh first to discover or create a project."
     echo ""
     echo "Example:"
-    echo "  $0 https://main.spidmax.win API_KEY https://github.com/user/repo PROJECT_ID myapp.example.com web docker-compose.yml postgres"
+    echo "  $0 https://main.spidmax.win API_KEY https://github.com/user/repo PROJECT_ID myapp.example.com web docker-compose.yml ENV_ID 3000"
     exit 1
 fi
 
@@ -42,13 +45,14 @@ else
 fi
 echo ""
 
-# Get project details to find the default environment ID
-echo "Fetching project details..."
-PROJECT_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%7D%7D%7D" \
-    -H "x-api-key: $DOKPLOY_API_KEY")
+# If no environment ID was passed, look it up from the project
+if [ -z "$ENVIRONMENT_ID" ]; then
+    echo "Fetching project details to find default environment..."
+    PROJECT_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%7D%7D%7D" \
+        -H "x-api-key: $DOKPLOY_API_KEY")
 
-# Extract environment ID for the project
-ENVIRONMENT_ID=$(echo "$PROJECT_DATA" | python3 -c "
+    # Extract environment ID for the project
+    ENVIRONMENT_ID=$(echo "$PROJECT_DATA" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 projects = data[0]['result']['data']['json']
@@ -61,9 +65,11 @@ for p in projects:
         break
 " 2>/dev/null || echo "")
 
-if [ -z "$ENVIRONMENT_ID" ]; then
-    echo "Error: Could not find default environment for project $PROJECT_ID"
-    exit 1
+    if [ -z "$ENVIRONMENT_ID" ]; then
+        echo "Error: Could not find default environment for project $PROJECT_ID"
+        echo "Run list_or_create_project.sh first to discover or create a project."
+        exit 1
+    fi
 fi
 
 echo "Using environment: $ENVIRONMENT_ID"
@@ -109,108 +115,16 @@ except:
     pass
 " 2>/dev/null || echo "")
 
-# Create database if requested
-DATABASE_ID=""
-DATABASE_CONNECTION_STRING=""
-
-if [ "$DATABASE_TYPE" != "none" ]; then
-    echo "Creating $DATABASE_TYPE database..."
-
-    DB_NAME="${REPO_NAME}-db"
-    DB_USER="${REPO_NAME}_user"
-    DB_PASSWORD=$(openssl rand -base64 32 | tr -d "=+/" | cut -c1-25)
-
-    case "$DATABASE_TYPE" in
-        postgres)
-            DB_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/postgres.create?batch=1" \
-                -H "x-api-key: $DOKPLOY_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"0\":{\"json\":{\"name\":\"$DB_NAME\",\"appName\":\"$DB_NAME\",\"environmentId\":\"$ENVIRONMENT_ID\",\"databaseName\":\"$DB_NAME\",\"databaseUser\":\"$DB_USER\",\"databasePassword\":\"$DB_PASSWORD\"}}}")
-
-            if echo "$DB_RESPONSE" | grep -q '"error"'; then
-                echo "Warning: Database creation failed, continuing without database"
-            else
-                DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['postgresId'])" 2>/dev/null || echo "")
-                DB_APP_NAME=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['appName'])" 2>/dev/null || echo "$DB_NAME")
-                DATABASE_CONNECTION_STRING="postgresql://$DB_USER:$DB_PASSWORD@$DB_APP_NAME:5432/$DB_NAME"
-                echo "✓ PostgreSQL database created: $DB_NAME (container: $DB_APP_NAME)"
-            fi
-            ;;
-        mysql)
-            DB_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/mysql.create?batch=1" \
-                -H "x-api-key: $DOKPLOY_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"0\":{\"json\":{\"name\":\"$DB_NAME\",\"appName\":\"$DB_NAME\",\"environmentId\":\"$ENVIRONMENT_ID\",\"databaseName\":\"$DB_NAME\",\"databaseUser\":\"$DB_USER\",\"databasePassword\":\"$DB_PASSWORD\"}}}")
-
-            if echo "$DB_RESPONSE" | grep -q '"error"'; then
-                echo "Warning: Database creation failed, continuing without database"
-            else
-                DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['mysqlId'])" 2>/dev/null || echo "")
-                DATABASE_CONNECTION_STRING="mysql://$DB_USER:$DB_PASSWORD@$DB_NAME:3306/$DB_NAME"
-                echo "✓ MySQL database created: $DB_NAME"
-            fi
-            ;;
-        mongodb)
-            DB_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/mongo.create?batch=1" \
-                -H "x-api-key: $DOKPLOY_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"0\":{\"json\":{\"name\":\"$DB_NAME\",\"appName\":\"$DB_NAME\",\"environmentId\":\"$ENVIRONMENT_ID\",\"databaseUser\":\"$DB_USER\",\"databasePassword\":\"$DB_PASSWORD\"}}}")
-
-            if echo "$DB_RESPONSE" | grep -q '"error"'; then
-                echo "Warning: Database creation failed, continuing without database"
-            else
-                DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['mongoId'])" 2>/dev/null || echo "")
-                DATABASE_CONNECTION_STRING="mongodb://$DB_USER:$DB_PASSWORD@$DB_NAME:27017/$DB_NAME"
-                echo "✓ MongoDB database created: $DB_NAME"
-            fi
-            ;;
-        mariadb)
-            DB_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/mariadb.create?batch=1" \
-                -H "x-api-key: $DOKPLOY_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"0\":{\"json\":{\"name\":\"$DB_NAME\",\"appName\":\"$DB_NAME\",\"environmentId\":\"$ENVIRONMENT_ID\",\"databaseName\":\"$DB_NAME\",\"databaseUser\":\"$DB_USER\",\"databasePassword\":\"$DB_PASSWORD\"}}}")
-
-            if echo "$DB_RESPONSE" | grep -q '"error"'; then
-                echo "Warning: Database creation failed, continuing without database"
-            else
-                DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['mariadbId'])" 2>/dev/null || echo "")
-                DATABASE_CONNECTION_STRING="mariadb://$DB_USER:$DB_PASSWORD@$DB_NAME:3306/$DB_NAME"
-                echo "✓ MariaDB database created: $DB_NAME"
-            fi
-            ;;
-        redis)
-            DB_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/redis.create?batch=1" \
-                -H "x-api-key: $DOKPLOY_API_KEY" \
-                -H "Content-Type: application/json" \
-                -d "{\"0\":{\"json\":{\"name\":\"$DB_NAME\",\"appName\":\"$DB_NAME\",\"environmentId\":\"$ENVIRONMENT_ID\",\"databasePassword\":\"$DB_PASSWORD\"}}}")
-
-            if echo "$DB_RESPONSE" | grep -q '"error"'; then
-                echo "Warning: Database creation failed, continuing without database"
-            else
-                DATABASE_ID=$(echo "$DB_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json']['redisId'])" 2>/dev/null || echo "")
-                DATABASE_CONNECTION_STRING="redis://:$DB_PASSWORD@$DB_NAME:6379"
-                echo "✓ Redis database created: $DB_NAME"
-            fi
-            ;;
-    esac
-fi
-
 if [ -n "$EXISTING_COMPOSE_ID" ]; then
     echo "✓ Found existing compose service: $EXISTING_COMPOSE_ID"
     echo "Updating existing service instead of creating new one..."
     COMPOSE_ID="$EXISTING_COMPOSE_ID"
 
-    # Build environment variables for update
-    ENV_VARS=""
-    if [ -n "$DATABASE_CONNECTION_STRING" ]; then
-        ENV_VARS="DATABASE_URL=$DATABASE_CONNECTION_STRING"
-    fi
-
     # Update the existing compose service (with githubId for webhook)
     UPDATE_COMPOSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/compose.update?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"composePath\":\"./$COMPOSE_FILE\",\"sourceType\":\"github\",\"autoDeploy\":true$(if [ -n "$ENV_VARS" ]; then echo ",\"env\":\"$ENV_VARS\""; fi)}}}")
+        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"composePath\":\"./$COMPOSE_FILE\",\"sourceType\":\"github\",\"autoDeploy\":true}}}")
 
     if echo "$UPDATE_COMPOSE" | grep -q '"error"'; then
         UPDATE_ERROR=$(echo "$UPDATE_COMPOSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
@@ -246,17 +160,13 @@ else
 
     echo "✓ Compose service created: $COMPOSE_ID"
 
-    # Configure GitHub repository and environment variables for new service
+    # Configure GitHub repository for new service
     echo "Configuring GitHub repository..."
-    ENV_VARS=""
-    if [ -n "$DATABASE_CONNECTION_STRING" ]; then
-        ENV_VARS="DATABASE_URL=$DATABASE_CONNECTION_STRING"
-    fi
 
     UPDATE_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/compose.update?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"sourceType\":\"github\"$(if [ -n "$ENV_VARS" ]; then echo ",\"env\":\"$ENV_VARS\""; fi)}}}")
+        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\",\"sourceType\":\"github\"}}}")
 
     if echo "$UPDATE_RESPONSE" | grep -q '"error"'; then
         UPDATE_ERROR=$(echo "$UPDATE_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
@@ -289,13 +199,17 @@ except:
 if [ -n "$HAS_DOMAIN" ]; then
     echo "✓ Domain already exists: https://$SUBDOMAIN"
 else
-    # Auto-detect port from docker-compose.yml if possible
-    if [ -f "./$COMPOSE_FILE" ]; then
-        DETECTED_PORT=$(bash "$SCRIPT_DIR/detect_port.sh" "./$COMPOSE_FILE" "$SERVICE_NAME" 2>/dev/null || echo "5000")
+    # Use provided port, or auto-detect from docker-compose.yml, or default to 3000
+    if [ "$SERVICE_PORT" != "3000" ]; then
+        DETECTED_PORT="$SERVICE_PORT"
+        echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT from manifest)..."
+    elif [ -f "./$COMPOSE_FILE" ]; then
+        DETECTED_PORT=$(bash "$SCRIPT_DIR/detect_port.sh" "./$COMPOSE_FILE" "$SERVICE_NAME" 2>/dev/null || echo "3000")
+        echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT auto-detected)..."
     else
-        DETECTED_PORT="5000"
+        DETECTED_PORT="3000"
+        echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT default)..."
     fi
-    echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT)..."
 
     DOMAIN_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/domain.create?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
@@ -322,11 +236,6 @@ echo "  - Repository: https://github.com/$REPO_PATH"
 echo "  - Auto-deploy: enabled on push to main"
 echo "  - Domain: https://$SUBDOMAIN"
 
-if [ -n "$DATABASE_ID" ]; then
-    echo "  - Database: $DATABASE_TYPE ($DB_NAME)"
-    echo "  - Database URL: $DATABASE_CONNECTION_STRING"
-fi
-
 echo ""
 echo "Triggering deployment..."
 
@@ -347,12 +256,14 @@ if echo "$DEPLOY_RESPONSE" | grep -q '"success":true'; then
     echo "✓ Deployment queued successfully"
     echo ""
 
-    # Post-deployment health check
+    # Post-deployment health check (two-phase: build + Traefik propagation)
     echo "=== Post-deployment Health Check ==="
-    echo "Waiting for deployment to complete (max 120 seconds)..."
+    echo "Phase 1: Waiting for Dokploy build/deploy (up to 10 min for large apps)..."
 
-    HEALTH_CHECK_PASSED=false
-    for i in $(seq 1 24); do
+    # Phase 1: Wait for Dokploy to finish building (build times vary by app complexity)
+    BUILD_WAIT_MAX=120  # max iterations (120 x 5s = 10 min)
+    BUILD_DONE=false
+    for i in $(seq 1 $BUILD_WAIT_MAX); do
         sleep 5
         STATUS_RESPONSE=$(curl -s "$DOKPLOY_URL/api/trpc/compose.one?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22composeId%22%3A%22$COMPOSE_ID%22%7D%7D%7D" \
             -H "x-api-key: $DOKPLOY_API_KEY")
@@ -368,9 +279,10 @@ except:
 " 2>/dev/null || echo "error")
 
         case "$DEPLOY_STATUS" in
-            "done")
-                echo "✓ Deployment completed!"
-                HEALTH_CHECK_PASSED=true
+            "done"|"running")
+                ELAPSED=$((i*5))
+                echo "  [${ELAPSED}s] Dokploy status: $DEPLOY_STATUS ✓"
+                BUILD_DONE=true
                 break
                 ;;
             "error")
@@ -380,13 +292,8 @@ except:
                 echo "  $DOKPLOY_URL/dashboard/project/$PROJECT_ID/services/compose/$COMPOSE_ID"
                 exit 1
                 ;;
-            "running")
-                echo "  [$((i*5))s] Service is running"
-                HEALTH_CHECK_PASSED=true
-                break
-                ;;
             "building")
-                echo "  [$((i*5))s] Still building..."
+                echo "  [$((i*5))s] Building..."
                 ;;
             *)
                 echo "  [$((i*5))s] Status: $DEPLOY_STATUS"
@@ -394,16 +301,31 @@ except:
         esac
     done
 
-    if [ "$HEALTH_CHECK_PASSED" = true ]; then
+    if [ "$BUILD_DONE" = true ]; then
+        # Phase 2: Traefik propagation delay (Dokploy needs ~30s to sync routes)
         echo ""
-        echo "=== HTTP Health Check ==="
-        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$SUBDOMAIN" 2>/dev/null || echo "000")
-        if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
-            echo "✓ Service is responding (HTTP $HTTP_STATUS): https://$SUBDOMAIN"
-        else
-            echo "⚠ Service not yet responding (HTTP $HTTP_STATUS)"
-            echo "  It may need more time or there could be an issue."
-            echo "  Check logs: $DOKPLOY_URL/dashboard/project/$PROJECT_ID/services/compose/$COMPOSE_ID"
+        echo "Phase 2: Waiting for Traefik/DNS propagation (~30s)..."
+        HTTP_OK=false
+        for i in $(seq 1 12); do  # 12 x 5s = 60s max for Traefik
+            sleep 5
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$SUBDOMAIN" 2>/dev/null || echo "000")
+            ELAPSED=$((i*5))
+            if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
+                echo "  [${ELAPSED}s] HTTP $HTTP_STATUS ✓ — Service is live!"
+                echo "✓ Service is responding: https://$SUBDOMAIN"
+                HTTP_OK=true
+                break
+            else
+                echo "  [${ELAPSED}s] HTTP $HTTP_STATUS (waiting for Traefik...)"
+            fi
+        done
+
+        if [ "$HTTP_OK" = false ]; then
+            echo ""
+            echo "⚠ Service not yet responding after Traefik wait"
+            echo "  Dokploy shows: $DEPLOY_STATUS"
+            echo "  This is usually a Traefik middleware issue — check the dashboard:"
+            echo "  $DOKPLOY_URL/dashboard/project/$PROJECT_ID/services/compose/$COMPOSE_ID"
         fi
     fi
 
@@ -412,9 +334,6 @@ except:
     echo "  1. View dashboard: $DOKPLOY_URL/dashboard/project/$PROJECT_ID/services/compose/$COMPOSE_ID"
     echo "  2. Access app: https://$SUBDOMAIN"
     echo "  3. Future pushes to main will auto-deploy"
-    if [ -n "$DATABASE_CONNECTION_STRING" ]; then
-        echo "  4. Database connection string set as DATABASE_URL environment variable"
-    fi
 else
     DEPLOY_ERROR=$(echo "$DEPLOY_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
     echo "⚠ Deployment trigger failed: $DEPLOY_ERROR"
