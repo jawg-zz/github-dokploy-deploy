@@ -14,7 +14,10 @@ Automates: local project → GitHub → Dokploy Docker Compose deployment.
 scripts/list_or_create_project.sh <dokploy-url> <api-key> [new-project-name]
 
 # Step 2: Deploy to the chosen project
-scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file]
+scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> [subdomain] [service-name] [compose-file]
+
+# Use 'auto' for subdomain to generate traefik.me domain (no DNS setup needed)
+scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> auto
 ```
 
 ## Core Workflow
@@ -111,6 +114,7 @@ For optional features, see references:
 - **Watch paths**: `references/watch-paths.md`
 - **Domain management**: `references/domains.md`
 - **Domain configuration fix**: `references/domain-fix.md` (Important: Port + Service Name required)
+- **traefik.me auto-domains**: `references/traefik-me.md` (Zero-config deployments)
 
 ## Core Scripts
 

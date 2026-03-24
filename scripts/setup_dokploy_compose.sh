@@ -1,6 +1,6 @@
 #!/bin/bash
 # Configure Dokploy docker-compose deployment with GitHub webhook and subdomain
-# Features: smart updates, validation, health check
+# Features: smart updates, validation, health check, traefik.me auto-domains
 
 set -e
 
@@ -14,15 +14,17 @@ COMPOSE_FILE="${7:-docker-compose.yml}"
 ENVIRONMENT_ID="${8:-}"  # Optional: pre-resolved environment ID (from list_or_create_project.sh)
 SERVICE_PORT="${9:-3000}"  # Port for domain routing (default: 3000)
 
-if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$GITHUB_REPO_URL" ] || [ -z "$PROJECT_ID" ] || [ -z "$SUBDOMAIN" ]; then
-    echo "Usage: $0 <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id> <subdomain> [service-name] [compose-file] [environment-id] [port]"
+if [ -z "$DOKPLOY_URL" ] || [ -z "$DOKPLOY_API_KEY" ] || [ -z "$GITHUB_REPO_URL" ] || [ -z "$PROJECT_ID" ]; then
+    echo "Usage: $0 <dokploy-url> <dokploy-api-key> <github-repo-url> <project-id> [subdomain] [service-name] [compose-file] [environment-id] [port]"
     echo ""
     echo "Port: Service port for domain routing (default: 3000)"
+    echo "Subdomain: Custom domain or 'auto' for traefik.me (default: auto)"
     echo ""
     echo "Tip: Use list_or_create_project.sh first to discover or create a project."
     echo ""
-    echo "Example:"
-    echo "  $0 https://main.spidmax.win API_KEY https://github.com/user/repo PROJECT_ID myapp.example.com web docker-compose.yml ENV_ID 3000"
+    echo "Examples:"
+    echo "  $0 https://main.spidmax.win API_KEY https://github.com/user/repo PROJECT_ID auto web docker-compose.yml ENV_ID 3000"
+    echo "  $0 https://main.spidmax.win API_KEY https://github.com/user/repo PROJECT_ID myapp.example.com"
     exit 1
 fi
 
@@ -32,6 +34,20 @@ OWNER=$(echo "$REPO_PATH" | cut -d'/' -f1)
 REPO_NAME=$(echo "$REPO_PATH" | cut -d'/' -f2)
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Handle traefik.me auto-domain generation
+if [ -z "$SUBDOMAIN" ] || [ "$SUBDOMAIN" = "auto" ]; then
+    echo "Generating traefik.me domain..."
+    
+    # Try to get server IP from Dokploy
+    SERVER_IP=$(curl -s "$DOKPLOY_URL/api/trpc/admin.one?batch=1" \
+        -H "x-api-key: $DOKPLOY_API_KEY" 2>/dev/null | \
+        python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0]['result']['data']['json'].get('serverIp', ''))" 2>/dev/null || echo "")
+    
+    SUBDOMAIN=$(bash "$SCRIPT_DIR/generate_traefik_domain.sh" "$REPO_NAME" "$SERVER_IP")
+    echo "✓ Generated domain: $SUBDOMAIN"
+    echo ""
+fi
 
 echo "Setting up Dokploy compose deployment for: $OWNER/$REPO_NAME"
 echo ""
@@ -211,17 +227,31 @@ else
         echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT default)..."
     fi
 
+    # Determine HTTPS setting based on domain type
+    local use_https="true"
+    if [[ "$SUBDOMAIN" =~ \.traefik\.me$ ]]; then
+        # traefik.me domains use HTTP by default (no auto SSL)
+        use_https="false"
+        echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT, HTTP only - traefik.me)..."
+    else
+        echo "Creating subdomain: $SUBDOMAIN (port: $DETECTED_PORT, HTTPS enabled)..."
+    fi
+
     DOMAIN_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/domain.create?batch=1" \
         -H "x-api-key: $DOKPLOY_API_KEY" \
         -H "Content-Type: application/json" \
-        -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":true,\"port\":$DETECTED_PORT,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\"}}}")
+        -d "{\"0\":{\"json\":{\"host\":\"$SUBDOMAIN\",\"https\":$use_https,\"port\":$DETECTED_PORT,\"path\":\"/\",\"composeId\":\"$COMPOSE_ID\",\"domainType\":\"compose\",\"serviceName\":\"$SERVICE_NAME\"}}}")
 
     if echo "$DOMAIN_RESPONSE" | grep -q '"error"'; then
         DOMAIN_ERROR=$(echo "$DOMAIN_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
         echo "Warning: Domain creation failed: $DOMAIN_ERROR"
         echo "You may need to configure the domain manually in Dokploy UI"
     else
-        echo "✓ Domain created: https://$SUBDOMAIN"
+        if [ "$use_https" = "true" ]; then
+            echo "✓ Domain created: https://$SUBDOMAIN"
+        else
+            echo "✓ Domain created: http://$SUBDOMAIN (traefik.me - HTTP only)"
+        fi
     fi
 fi
 
@@ -234,7 +264,13 @@ fi
 echo "  - Compose ID: $COMPOSE_ID"
 echo "  - Repository: https://github.com/$REPO_PATH"
 echo "  - Auto-deploy: enabled on push to main"
-echo "  - Domain: https://$SUBDOMAIN"
+
+# Show correct protocol based on domain type
+if [[ "$SUBDOMAIN" =~ \.traefik\.me$ ]]; then
+    echo "  - Domain: http://$SUBDOMAIN (traefik.me - HTTP only)"
+else
+    echo "  - Domain: https://$SUBDOMAIN"
+fi
 
 echo ""
 echo "Triggering deployment..."
@@ -306,13 +342,21 @@ except:
         echo ""
         echo "Phase 2: Waiting for Traefik/DNS propagation (~30s)..."
         HTTP_OK=false
+        
+        # Determine protocol based on domain type
+        if [[ "$SUBDOMAIN" =~ \.traefik\.me$ ]]; then
+            CHECK_URL="http://$SUBDOMAIN"
+        else
+            CHECK_URL="https://$SUBDOMAIN"
+        fi
+        
         for i in $(seq 1 12); do  # 12 x 5s = 60s max for Traefik
             sleep 5
-            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "https://$SUBDOMAIN" 2>/dev/null || echo "000")
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 "$CHECK_URL" 2>/dev/null || echo "000")
             ELAPSED=$((i*5))
             if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 400 ]; then
                 echo "  [${ELAPSED}s] HTTP $HTTP_STATUS ✓ — Service is live!"
-                echo "✓ Service is responding: https://$SUBDOMAIN"
+                echo "✓ Service is responding: $CHECK_URL"
                 HTTP_OK=true
                 break
             else
@@ -332,7 +376,11 @@ except:
     echo ""
     echo "Next steps:"
     echo "  1. View dashboard: $DOKPLOY_URL/dashboard/project/$PROJECT_ID/services/compose/$COMPOSE_ID"
-    echo "  2. Access app: https://$SUBDOMAIN"
+    if [[ "$SUBDOMAIN" =~ \.traefik\.me$ ]]; then
+        echo "  2. Access app: http://$SUBDOMAIN"
+    else
+        echo "  2. Access app: https://$SUBDOMAIN"
+    fi
     echo "  3. Future pushes to main will auto-deploy"
 else
     DEPLOY_ERROR=$(echo "$DEPLOY_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
