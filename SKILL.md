@@ -65,13 +65,28 @@ volumes:
 
 ## Prerequisites
 
-Projects need `docker-compose.yml` before deploying. Generate one:
+Projects need `docker-compose.yml` before deploying. Generate one following best practices:
+
+```bash
+# Generate from template
+bash scripts/generate_compose.sh <template-type> [options]
+
+# Examples:
+bash scripts/generate_compose.sh node --name myapp --port 3000
+bash scripts/generate_compose.sh fullstack --name webapp --cache redis
+bash scripts/generate_compose.sh python --db mysql --port 8000
+bash scripts/generate_compose.sh static --name mysite --db none
+```
+
+**Templates:** `node`, `node-redis`, `python`, `static`, `fullstack`, `custom`
+
+See `references/compose-generator.md` for full documentation.
+
+Or detect framework and generate:
 
 ```bash
 bash scripts/detect_framework.sh [project-dir]
 ```
-
-Or create manually using the structure above.
 
 ## Credentials
 
