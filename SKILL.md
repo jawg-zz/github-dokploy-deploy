@@ -14,10 +14,10 @@ Automates: local project → GitHub → Dokploy Docker Compose deployment.
 scripts/list_or_create_project.sh <dokploy-url> <api-key> [new-project-name]
 
 # Step 2: Deploy to the chosen project
-scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> [subdomain] [service-name] [compose-file]
+scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> [service-name] [compose-file]
 
-# Use 'auto' for subdomain to generate traefik.me domain (no DNS setup needed)
-scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> auto
+# Note: Configure domains via Traefik labels in docker-compose.yml
+# See references/traefik-labels.md for examples
 ```
 
 ## Core Workflow
@@ -31,6 +31,8 @@ scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <proj
 ## Docker Compose Structure
 
 All services (app, databases, workers, etc.) are defined in a single `docker-compose.yml` file, just like Dokploy's built-in templates.
+
+**Domains are configured via Traefik labels** - no manual UI configuration needed.
 
 **Example: Full-stack app with database**
 
@@ -48,14 +50,20 @@ services:
 
   web:
     build: .
-    ports:
-      - 3000
+    networks:
+      - dokploy-network
     environment:
       DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/myapp
       NODE_ENV: production
     depends_on:
       - postgres
     restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.myapp.rule=Host(`myapp.example.com`)"
+      - "traefik.http.routers.myapp.entrypoints=websecure"
+      - "traefik.http.routers.myapp.tls.certresolver=letsencrypt"
+      - "traefik.http.services.myapp.loadbalancer.server.port=3000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
@@ -64,7 +72,13 @@ services:
 
 volumes:
   postgres_data:
+
+networks:
+  dokploy-network:
+    external: true
 ```
+
+See `references/traefik-labels.md` for complete domain configuration examples.
 
 ## Prerequisites
 
@@ -109,12 +123,12 @@ Store in TOOLS.md:
 
 For optional features, see references:
 
+- **Traefik labels for domains**: `references/traefik-labels.md` (Configure domains in compose file)
 - **Framework detection & code generation**: `references/framework-detection.md`
 - **Deployment diagnostics**: `references/diagnostics.md`
 - **Watch paths**: `references/watch-paths.md`
 - **Domain management**: `references/domains.md`
 - **Domain configuration fix**: `references/domain-fix.md` (Important: Port + Service Name required)
-- **traefik.me auto-domains**: `references/traefik-me.md` (Zero-config deployments)
 
 ## Core Scripts
 
