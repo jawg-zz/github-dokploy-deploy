@@ -34,6 +34,8 @@ All services (app, databases, workers, etc.) are defined in a single `docker-com
 
 **Domains are configured via Traefik labels** - no manual UI configuration needed.
 
+**Important:** Domains configured via Traefik labels in docker-compose.yml will NOT appear in Dokploy's Domains UI. This is expected behavior - Traefik reads labels directly from containers. Your domains will work perfectly, they just won't be visible in the UI. This is the trade-off for infrastructure-as-code.
+
 **Example: Full-stack app with database**
 
 ```yaml
