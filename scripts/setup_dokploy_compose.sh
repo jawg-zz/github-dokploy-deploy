@@ -110,6 +110,21 @@ else
         echo "Error: Could not extract compose ID"
         exit 1
     fi
+    
+    # Configure GitHub connection (compose.create doesn't set these fields)
+    echo "Configuring GitHub repository..."
+    UPDATE_RESPONSE=$(curl -s -X POST "$DOKPLOY_URL/api/trpc/compose.update?batch=1" \
+        -H "x-api-key: $DOKPLOY_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d "{\"0\":{\"json\":{\"composeId\":\"$COMPOSE_ID\",\"githubId\":\"$GITHUB_ID\",\"repository\":\"$REPO_NAME\",\"owner\":\"$OWNER\",\"branch\":\"main\"}}}")
+    
+    if echo "$UPDATE_RESPONSE" | grep -q '"error"'; then
+        UPDATE_ERROR=$(echo "$UPDATE_RESPONSE" | python3 -c "import sys, json; data=json.load(sys.stdin); print(data[0].get('error', {}).get('json', {}).get('message', 'Unknown error'))" 2>/dev/null || echo "Unknown error")
+        echo "Error configuring GitHub: $UPDATE_ERROR"
+        exit 1
+    fi
+    
+    echo "✓ GitHub repository configured"
 fi
 
 echo ""
