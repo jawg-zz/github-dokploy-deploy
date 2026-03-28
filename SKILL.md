@@ -31,8 +31,18 @@ scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <proj
 2. Check prerequisites (git, GitHub token, Dokploy API key)
 3. Discover or create project (interactive selection)
 4. Initialize git → Create GitHub repo → Push code
-5. Deploy via compose script
+5. Deploy via compose script (initial deployment only)
 6. Auto-configure: domain, SSL, health checks, auto-deploy webhook
+
+**After initial setup:**
+- Just `git commit && git push` to deploy updates
+- Auto-deploy webhook triggers automatically on push
+- No need to manually trigger deployments
+
+**Manual redeployment (without new code):**
+```bash
+bash scripts/restart_service.sh <dokploy-url> <api-key> compose <service-id>
+```
 
 ## Compose File Validation
 
