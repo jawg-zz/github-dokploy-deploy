@@ -26,6 +26,31 @@ REPO_NAME=$(echo "$REPO_PATH" | cut -d'/' -f2)
 
 echo "Setting up Dokploy deployment for: $OWNER/$REPO_NAME"
 
+# Validate compose file if it exists locally
+if [ -f "$COMPOSE_FILE" ]; then
+    echo ""
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -f "$SCRIPT_DIR/validate_compose.sh" ]; then
+        if ! bash "$SCRIPT_DIR/validate_compose.sh" "$COMPOSE_FILE"; then
+            echo ""
+            echo "❌ Compose file validation failed"
+            echo ""
+            echo "Options:"
+            echo "  1. Fix manually and re-run"
+            echo "  2. Run validation with --fix: bash scripts/validate_compose.sh $COMPOSE_FILE --fix"
+            echo "  3. Continue anyway (NOT RECOMMENDED)"
+            echo ""
+            echo "Continue with deployment? (y/N)"
+            read -r response
+            if [[ ! "$response" =~ ^[Yy]$ ]]; then
+                echo "Deployment cancelled"
+                exit 1
+            fi
+        fi
+    fi
+    echo ""
+fi
+
 if [ -z "$ENVIRONMENT_ID" ]; then
     echo "Fetching environment ID..."
     PROJECT_DATA=$(curl -s "$DOKPLOY_URL/api/trpc/project.all?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%7D%7D%7D" \
