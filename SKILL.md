@@ -10,10 +10,15 @@ Automates: local project → GitHub → Dokploy Docker Compose deployment.
 ## Quick Start
 
 ```bash
-# Step 1: List or create a project
+# Step 1: Validate your compose file (recommended)
+scripts/validate_compose.sh docker-compose.yml
+# Or auto-fix common issues:
+scripts/validate_compose.sh docker-compose.yml --fix
+
+# Step 2: List or create a project
 scripts/list_or_create_project.sh <dokploy-url> <api-key> [new-project-name]
 
-# Step 2: Deploy to the chosen project
+# Step 3: Deploy to the chosen project
 scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <project-id> [service-name] [compose-file]
 
 # Note: Configure domains via Traefik labels in docker-compose.yml
@@ -22,11 +27,42 @@ scripts/setup_dokploy_compose.sh <dokploy-url> <api-key> <github-repo-url> <proj
 
 ## Core Workflow
 
-1. Check prerequisites (git, GitHub token, Dokploy API key)
-2. Discover or create project (interactive selection)
-3. Initialize git → Create GitHub repo → Push code
-4. Deploy via compose script
-5. Auto-configure: domain, SSL, health checks, auto-deploy webhook
+1. **Validate compose file** (prevents deployment failures)
+2. Check prerequisites (git, GitHub token, Dokploy API key)
+3. Discover or create project (interactive selection)
+4. Initialize git → Create GitHub repo → Push code
+5. Deploy via compose script
+6. Auto-configure: domain, SSL, health checks, auto-deploy webhook
+
+## Compose File Validation
+
+**Always validate before deploying** to catch issues early:
+
+```bash
+# Check for issues
+bash scripts/validate_compose.sh docker-compose.yml
+
+# Auto-fix common issues (port mappings)
+bash scripts/validate_compose.sh docker-compose.yml --fix
+```
+
+**What it checks:**
+
+| Issue | Severity | Auto-fix |
+|-------|----------|----------|
+| Port mappings (`ports:`) | ❌ ERROR | ✅ Yes |
+| Missing Traefik labels | ❌ ERROR | ❌ Manual |
+| Missing dokploy-network | ❌ ERROR | ⚠️ Partial |
+| Hardcoded secrets | ⚠️ WARNING | ❌ Manual |
+| Missing health checks | ⚠️ WARNING | ❌ Manual |
+| Obsolete version field | ℹ️ INFO | - |
+
+**Why validation matters:**
+- Port mappings cause "port already allocated" errors in Dokploy
+- Missing Traefik labels = service won't be accessible
+- Missing dokploy-network = Traefik can't route to your service
+
+Validation is automatically run during deployment and will block if errors are found.
 
 ## Docker Compose Structure
 
